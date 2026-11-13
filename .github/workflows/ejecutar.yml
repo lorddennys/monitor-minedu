@@ -1,0 +1,21 @@
+name: Monitor MINEDU
+
+on:
+  schedule:
+    - cron: '0 11,18,1 * * *' # Se ejecuta a las 6:00 a.m., 1:00 p.m. y 8:00 p.m.
+  workflow_dispatch: # Permite forzar una revisión manual cuando gustes
+
+jobs:
+  run-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Ejecutar script
+        run: python monitor.py
