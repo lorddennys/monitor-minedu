@@ -25,7 +25,11 @@ jobs:
 
       - name: Guardar novedades detectadas
         run: |
-          git config --global user.name "Monitor MINEDU Bot"
-          git config --global user.email "actions@github.com"
-          git add normas_conocidas.json
-          git diff --staged --quiet || (git commit -m "Nueva norma legal MINEDU detectada" && git push)
+          if [ -f "normas_conocidas.json" ]; then
+            git config --global user.name "Monitor MINEDU Bot"
+            git config --global user.email "actions@github.com"
+            git add normas_conocidas.json
+            git diff --staged --quiet || (git commit -m "Nueva norma legal MINEDU detectada" && git push)
+          else
+            echo "El archivo normas_conocidas.json no fue generado en esta ejecución."
+          fi
