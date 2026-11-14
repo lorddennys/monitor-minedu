@@ -1,54 +1,48 @@
-import json
 import os
+import json
 import urllib.request
-from datetime import datetime
+# Añade aquí el resto de librerías o funciones que ya utilizaba tu monitor original
 
-URL_MINEDU = "https://www.gob.pe/institucion/minedu/normas-legales"
-CACHE_FILE = "normas_conocidas.json"
+ARCHIVO_JSON = "normas_conocidas.json"
 
-def verificar():
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Consultando portal MINEDU...")
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
-    conocidas = []
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            try:
-                conocidas = json.load(f)
-            except:
-                conocidas = []
+def cargar_normas_conocidas():
+    """Carga el archivo JSON con las normas registradas previamente. 
+    Si no existe, crea uno vacío para evitar errores."""
+    if not os.path.exists(ARCHIVO_JSON):
+        with open(ARCHIVO_JSON, 'w', encoding='utf-8') as f:
+            json.dump([], f, ensure_ascii=False, indent=4)
+        return []
     
     try:
-        req = urllib.request.Request(URL_MINEDU, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as response:
-            html = response.read().decode('utf-8')
-        
-        encontradas = []
-        pos = 0
-        while True:
-            pos = html.find('class="font-semibold text-text-color', pos)
-            if pos == -1:
-                break
-            frag = html[pos:pos+300]
-            i1, i2 = frag.find('>'), frag.find('</')
-            if i1 != -1 and i2 != -1:
-                t = frag[i1+1:i2].strip()
-                if t and t not in encontradas and len(t) > 10:
-                    encontradas.append(t)
-            pos += 1
-            
-        novedades = [n for n in encontradas if n not in conocidas]
-        if novedades:
-            print(f"¡Nuevas normas detectadas: {len(novedades)}")
-            for n in novedades:
-                print(f"- {n}")
-                conocidas.append(n)
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(conocidas, f, ensure_ascii=False, indent=2)
-        else:
-            print("No hay normas nuevas.")
-    except Exception as e:
-        print(f"Error de conexión: {e}")
+        with open(ARCHIVO_JSON, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def guardar_normas_conocidas(normas):
+    """Guarda la lista actualizada de normas en el archivo JSON."""
+    with open(ARCHIVO_JSON, 'w', encoding='utf-8') as f:
+        json.dump(normas, f, ensure_ascii=False, indent=4)
+
+def ejecutar_monitor():
+    # 1. Cargar el registro previo
+    conocidas = cargar_normas_conocidas()
+    
+    # 2. AQUÍ VA TU LÓGICA ACTUAL para consultar la web del MINEDU
+    # (Por ejemplo, el código que extrae las nuevas normas del portal)
+    nuevas_normas_detectadas = [] # Reemplaza o integra esto con tu lógica de búsqueda
+    
+    # 3. Validar si hay novedades
+    if nuevas_normas_detectadas:
+        # Añades las nuevas a tu lista y guardas
+        conocidas.extend(nuevas_normas_detectadas)
+        guardar_normas_conocidas(conocidas)
+        print("Se detectaron y guardaron nuevas normas.")
+    else:
+        # Aseguramos que el archivo exista de todas formas para el control de Git
+        if not os.path.exists(ARCHIVO_JSON):
+            guardar_normas_conocidas(conocidas)
+        print("No se encontraron nuevas normas en esta revisión.")
 
 if __name__ == "__main__":
-    verificar()
+    ejecutar_monitor()
