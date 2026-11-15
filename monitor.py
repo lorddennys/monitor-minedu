@@ -3,10 +3,11 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import urllib.request
+from bs4 import BeautifulSoup
 
 ARCHIVO_JSON = "normas_conocidas.json"
 
-# Credenciales tomadas de forma segura desde GitHub Secrets
 EMAIL_REMITENTE = os.environ.get("EMAIL_USER")
 EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
 EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST") or EMAIL_REMITENTE
@@ -29,16 +30,21 @@ def guardar_normas_conocidas(normas):
         json.dump(normas, f, ensure_ascii=False, indent=4)
 
 
-def enviar_alerta_correo(nuevas_normas):
+def enviar_reporte_correo(nuevas_normas, total_encontradas):
     if not EMAIL_REMITENTE or not EMAIL_PASSWORD:
-        print("Faltan las variables de entorno EMAIL_USER o EMAIL_PASS. No se envió correo.")
-        return
+        raise ValueError("ERROR CRÍTICO: El script no recibió EMAIL_USER o EMAIL_PASS desde GitHub Actions. Revisa el archivo .yml.")
 
-    asunto = f"Alerta MINEDU: {len(nuevas_normas)} nueva(s) norma(s) detectada(s)"
-    cuerpo = "Se han detectado actualizaciones relevantes en el portal del MINEDU:\n\n"
-    
-    for norma in nuevas_normas:
-        cuerpo += f"- {norma}\n"
+    if nuevas_normas:
+        asunto = f"🚨 MINEDU: {len(nuevas_normas)} nueva(s) norma(s) detectada(s)"
+        cuerpo = "Se han encontrado las siguientes normas legales NUEVAS en el portal del MINEDU:\n\n"
+        for norma in nuevas_normas:
+            cuerpo += f"• {norma}\n"
+    else:
+        asunto = "✅ Reporte MINEDU: Revisión completada (Sin novedades)"
+        cuerpo = (
+            "El monitor se ejecutó correctamente, pero no se publicaron normas nuevas desde la última revisión.\n\n"
+            f"Total de normas verificadas en el portal: {len(total_encontradas)}\n"
+        )
 
     msg = MIMEMultipart()
     msg["From"] = EMAIL_REMITENTE
@@ -46,19 +52,27 @@ def enviar_alerta_correo(nuevas_normas):
     msg["Subject"] = asunto
     msg.attach(MIMEText(cuerpo, "plain", "utf-8"))
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
-            server.send_message(msg)
-        print("Correo de alerta enviado correctamente.")
-    except Exception as e:
-        print(f"Error al enviar el correo: {e}")
+    # Sin try/except silencioso: si Gmail rechaza algo, GitHub te lo mostrará claramente
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_REMITENTE, EMAIL_PASSWORD)
+        server.send_message(msg)
+    
+    print(f"Correo enviado exitosamente a {EMAIL_DESTINATARIO}.")
 
 
 def consultar_portal_minedu():
-    # Integra aquí tu lógica actual de consulta/scraping al MINEDU.
-    # Debe devolver una lista de strings o diccionarios con las normas encontradas.
-    return []
+    # MANTÉN AQUÍ TU CÓDIGO DE SCRAPING REAL QUE YA ESTÁ EXTRAYENDO LAS NORMAS
+    url = "https://www.gob.pe/institucion/minedu/normas-legales"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    html = urllib.request.urlopen(req).read().decode("utf-8")
+    soup = BeautifulSoup(html, "html.parser")
+    
+    normas = []
+    for item in soup.find_all("a"):
+        texto = item.get_text(strip=True)
+        if "MINEDU" in texto and len(texto) > 15:
+            normas.append(texto)
+    return list(dict.fromkeys(normas))
 
 
 def ejecutar_monitor():
@@ -70,12 +84,14 @@ def ejecutar_monitor():
     if nuevas:
         conocidas.extend(nuevas)
         guardar_normas_conocidas(conocidas)
-        enviar_alerta_correo(nuevas)
-        print(f"Se registraron {len(nuevas)} nuevas normas.")
+        print(f"Se guardaron {len(nuevas)} nuevas normas.")
     else:
         if not os.path.exists(ARCHIVO_JSON):
             guardar_normas_conocidas(conocidas)
-        print("Sin novedades en esta ejecución.")
+        print("Sin normas nuevas.")
+
+    # Se envía el correo SIEMPRE, haya o no haya novedades
+    enviar_reporte_correo(nuevas, encontradas)
 
 
 if __name__ == "__main__":
